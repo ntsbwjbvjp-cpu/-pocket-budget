@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pocket-budget-notifications",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-17",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "REMINDERS",
+        "class_name": "ReminderHub"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ReminderHub"]
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
