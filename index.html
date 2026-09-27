@@ -45,8 +45,9 @@
     @media(max-width:570px){.spending-panel .chart-wrap{grid-template-columns:1fr;gap:20px}.spending-panel .donut{width:min(74vw,260px)}.spending-panel .donut-center strong{font-size:clamp(1.2rem,6vw,1.75rem)}.spending-panel .legend{max-height:330px}}
     .spending-page .period-tabs{margin-top:0}.spending-page .spending-panel{min-height:calc(100svh - 250px);padding:22px}
     .spending-page .spending-panel .chart-wrap{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:24px}
-    .spending-page .donut{width:min(100%,350px);isolation:isolate;box-shadow:0 7px 0 #0d143e,0 20px 32px rgba(0,0,0,.43),0 0 0 9px rgba(88,106,202,.08)}
-    .spending-page .donut:before{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 28% 21%,rgba(255,255,255,.5),transparent 48%),linear-gradient(to bottom,rgba(255,255,255,.1) 5%,transparent 40%,rgba(3,7,31,.45) 100%);mix-blend-mode:soft-light;pointer-events:none;z-index:1}
+    .spending-page .donut{width:min(100%,350px);isolation:isolate;background:#151e50;box-shadow:0 18px 32px rgba(0,0,0,.34),0 0 0 9px rgba(88,106,202,.08)}
+    .spending-page .donut-visual{position:absolute;inset:0;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 9px 7px rgba(2,6,30,.36))}
+    .spending-page .donut:before{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 25% 17%,rgba(255,255,255,.28),transparent 39%),linear-gradient(to bottom,rgba(255,255,255,.08),transparent 43%,rgba(2,5,27,.27));mix-blend-mode:soft-light;pointer-events:none;z-index:1}
     .spending-page .donut:after{background:radial-gradient(circle at 35% 28%,#202f70,#121a48 70%);box-shadow:inset 0 4px 15px rgba(4,7,32,.64),0 0 0 2px rgba(255,255,255,.12);z-index:2}
     .spending-page .donut-center{z-index:3}.spending-page .legend{max-height:none;overflow:visible}
     @media(max-width:570px){.spending-page .spending-panel .chart-wrap{grid-template-columns:1fr}.spending-page .donut{width:min(76vw,320px)}.spending-page .spending-panel{min-height:0}.spending-page .legend{max-height:none}}
@@ -73,7 +74,7 @@
     <section class="app-page spending-page" data-app-page="5" hidden>
       <div class="section-title"><div><h2>Where your money goes</h2><p>See the full picture of your spending</p></div><button class="add" id="editSpending">Edit expenses</button></div>
       <nav class="period-tabs" aria-label="Spending period"><button class="period-tab active" data-view="monthly">Monthly</button><button class="period-tab" data-view="fortnightly">Fortnightly</button></nav>
-      <div class="panel spending-panel"><div class="panel-head"><div><h2>Expense breakdown</h2><p>Each colour shows a share of your budget.</p></div></div><div class="chart-wrap"><div class="donut" id="donut" role="img" aria-label="Expense breakdown chart"><div class="donut-center"><small id="donutPeriod">Monthly expenses</small><strong id="donutTotal">$0</strong></div></div><div class="legend" id="legend"></div></div></div>
+      <div class="panel spending-panel"><div class="panel-head"><div><h2>Expense breakdown</h2><p>Each colour shows a share of your budget.</p></div></div><div class="chart-wrap"><div class="donut" id="donut" role="img" aria-label="Expense breakdown chart"><svg class="donut-visual" id="donutVisual" viewBox="0 0 400 400" aria-hidden="true" focusable="false"></svg><div class="donut-center"><small id="donutPeriod">Monthly expenses</small><strong id="donutTotal">$0</strong></div></div><div class="legend" id="legend"></div></div></div>
     </section>
     <section class="app-page" data-app-page="1" hidden>
       <div class="section-title"><div><h2>Budget details</h2><p>Edit income, expenses and payday</p></div><button class="secondary" id="backDashboard">← Dashboard</button></div>
@@ -174,14 +175,13 @@
     $('#donutTotal').textContent=money(total*display);
     $('#donutPeriod').textContent=state.view==='fortnightly'?'Fortnightly expenses':'Monthly expenses';
     $('#donut').setAttribute('aria-label',total?'Expense breakdown: '+positive.map(x=>`${x.name||'Other'} ${money(x.value*display)}`).join(', '):'No expenses entered');
-    if(!total){$('#donut').style.background='#354078';$('#legend').innerHTML='<p>No expenses entered yet.</p>';return}
-    let cursor=0;
-    const segments=positive.map((x,i)=>{
-      const start=cursor;cursor+=x.value/total*100;
-      const gap=Math.min(.55,(cursor-start)*.22);
-      return `transparent ${start}% ${start+gap/2}%,${colours[i%colours.length]} ${start+gap/2}% ${cursor-gap/2}%,transparent ${cursor-gap/2}% ${cursor}%`;
-    });
-    $('#donut').style.background=`conic-gradient(${segments.join(',')})`;
+    if(!total){$('#donutVisual').innerHTML='';$('#legend').innerHTML='<p>No expenses entered yet.</p>';return}
+    const shade=(hex,blend)=>'#'+[1,3,5].map(i=>Math.round(parseInt(hex.slice(i,i+2),16)*(1-Math.abs(blend))+(blend>0?255:0)*Math.abs(blend)).toString(16).padStart(2,'0')).join('');
+    const point=(radius,degrees)=>[200+radius*Math.cos(degrees*Math.PI/180),200+radius*Math.sin(degrees*Math.PI/180)];
+    const arc=(from,to)=>{const [x1,y1]=point(190,from),[x2,y2]=point(190,to),[x3,y3]=point(123,to),[x4,y4]=point(123,from),large=to-from>180?1:0;return `M${x1.toFixed(2)} ${y1.toFixed(2)} A190 190 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} L${x3.toFixed(2)} ${y3.toFixed(2)} A123 123 0 ${large} 0 ${x4.toFixed(2)} ${y4.toFixed(2)} Z`};
+    let cursor=-90;
+    const segments=positive.map((x,i)=>{const span=x.value/total*360,gap=Math.min(2.4,span*.2),from=cursor+gap/2,to=cursor+span-gap/2;cursor+=span;return {i,path:arc(from,to),color:colours[i%colours.length]}});
+    $('#donutVisual').innerHTML=`<defs>${segments.map(s=>`<linearGradient id="slice-${s.i}" x1="12%" y1="0%" x2="88%" y2="100%"><stop offset="0%" stop-color="${shade(s.color,.47)}"/><stop offset="42%" stop-color="${s.color}"/><stop offset="100%" stop-color="${shade(s.color,-.42)}"/></linearGradient>`).join('')}</defs>${segments.map(s=>`<path d="${s.path}" transform="translate(0 9)" fill="${shade(s.color,-.64)}"/>`).join('')}${segments.map(s=>`<path d="${s.path}" fill="url(#slice-${s.i})" stroke="${shade(s.color,.28)}" stroke-width="1.1"/>`).join('')}`;
     $('#legend').innerHTML=positive.map((x,i)=>`<div class="legend-item"><span class="dot" style="background:${colours[i%colours.length]};color:${colours[i%colours.length]}"></span><span class="legend-name">${categoryIcon(x.name)}<span class="category-label">${esc(x.name||'Other')}</span></span><span class="legend-amount">${money(x.value*display)}</span><span class="legend-pct">${Math.round(x.value/total*100)}%</span></div>`).join('')
   }
   function renderDashboardGoals(){const shown=state.goals.slice(0,2),container=$('#dashboardGoalCharts'),link=$('#viewAllGoals');container.innerHTML=shown.length?shown.map((g,i)=>{const saved=Math.max(0,Number(g.saved)||0),target=Math.max(0,Number(g.target)||0),pct=target?Math.min(100,saved/target*100):0,colour=i===0?'#67e8f9':'#f0abfc';return `<div class="hero-goal"><div class="goal-pie" role="img" aria-label="${esc(g.name||'Savings goal')} ${pct.toFixed(0)} percent complete" style="background:conic-gradient(${colour} 0 ${pct}%,rgba(255,255,255,.16) ${pct}% 100%)"><strong>${pct.toFixed(0)}%</strong></div><div class="hero-goal-copy"><strong>${categoryIcon(g.name)}${esc(g.name||'Savings goal')}</strong><span>${money(saved)} of ${money(target)}</span><span>${money(Math.max(0,target-saved))} remaining</span></div></div>`}).join(''):'<div class="hero-goals-empty">Add a goal in the Goals tab to track it here.</div>';link.hidden=state.goals.length<=2;link.textContent=`View all ${state.goals.length} goals →`}
