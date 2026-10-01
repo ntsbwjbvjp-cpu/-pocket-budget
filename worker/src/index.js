@@ -15,7 +15,7 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (origin && origin !== APP_ORIGIN) return json({ error: 'Origin not allowed' }, 403, cors);
     const url = new URL(request.url);
-    if (url.pathname === '/health') return json({ ok: true, service: 'Pocket Budget notifications' }, 200, cors);
+    if (url.pathname === '/health') return json({ ok: true, service: 'Pocket Budget notifications', build: 'reminder-retry-v2' }, 200, cors);
     const id = env.REMINDERS.idFromName('pocket-budget');
     const response = await env.REMINDERS.get(id).fetch(request);
     const headers = new Headers(response.headers);
@@ -137,7 +137,8 @@ export class ReminderHub {
   async alarm() {
     try {
       const now = brisbaneNow();
-      if (now.hour !== 9) return;
+      // Retry throughout the reminder day if the morning alarm or a push attempt was delayed.
+      if (now.hour < 9) return;
       const devices = await this.ctx.storage.list({ prefix: 'device:' });
       for (const [key, device] of devices) {
         let changed = false;
@@ -149,12 +150,18 @@ export class ReminderHub {
           const sentKey = `${reminder.id}:${alertDate}`;
           if (alertDate !== now.date || device.lastSent?.[reminder.id] === sentKey) continue;
           const timing = reminder.remindDays === 0 ? 'is due today' : reminder.remindDays === 1 ? 'is due tomorrow' : `is due in ${reminder.remindDays} days`;
-          const result = await this.send(device.subscription, {
-            title: 'Pocket Budget',
-            body: `${reminder.label} ${timing}.`,
-            url: APP_URL,
-            tag: `bill-${reminder.id}`
-          });
+          let result;
+          try {
+            result = await this.send(device.subscription, {
+              title: 'Pocket Budget',
+              body: `${reminder.label} ${timing}.`,
+              url: APP_URL,
+              tag: `bill-${reminder.id}`
+            });
+          } catch (error) {
+            console.error('Bill reminder push failed', error);
+            continue;
+          }
           if (result.ok) {
             device.lastSent = device.lastSent || {};
             device.lastSent[reminder.id] = sentKey;
