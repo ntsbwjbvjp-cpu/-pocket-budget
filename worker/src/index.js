@@ -15,7 +15,7 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (origin && origin !== APP_ORIGIN) return json({ error: 'Origin not allowed' }, 403, cors);
     const url = new URL(request.url);
-    if (url.pathname === '/health') return json({ ok: true, service: 'Pocket Budget notifications', build: 'reminder-retry-v2' }, 200, cors);
+    if (url.pathname === '/health') return json({ ok: true, service: 'Pocket Budget notifications', build: 'reminder-topic-v3' }, 200, cors);
     const id = env.REMINDERS.idFromName('pocket-budget');
     const response = await env.REMINDERS.get(id).fetch(request);
     const headers = new Headers(response.headers);
@@ -170,6 +170,8 @@ export class ReminderHub {
             await this.ctx.storage.delete(key);
             changed = false;
             break;
+          } else {
+            console.error('Bill reminder push rejected', result.status);
           }
         }
         if (changed) await this.ctx.storage.put(key, device);
@@ -189,7 +191,9 @@ export class ReminderHub {
       message: {
         payload,
         adminContact: APP_URL,
-        options: { ttl: 86400, urgency: 'normal', topic: payload.tag }
+        // Notification tags may exceed Web Push's 32-character Topic limit.
+        // Keep the tag in the encrypted payload for on-device deduplication only.
+        options: { ttl: 86400, urgency: 'normal' }
       }
     });
     const response = await fetch(push.endpoint, { method: 'POST', headers: push.headers, body: push.body });
